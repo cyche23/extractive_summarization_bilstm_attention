@@ -1,0 +1,26 @@
+# ---- Python ignore ----
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# ---- Virtual env ----
+venv/
+
+# ---- Jupyter ----
+.ipynb_checkpoints/
+
+# ---- Data directories ----
+data/raw/
+data/processed/*.tmp
+*.csv
+*.tsv
+
+# ---- Logs ----
+*.log
+
+# ---- OS / Editor ----
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
