@@ -24,3 +24,6 @@ data/processed/*.tmp
 Thumbs.db
 .vscode/
 .idea/
+
+# ---- data ----
+.raw
