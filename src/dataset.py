@@ -29,13 +29,16 @@ class SummDataset(Dataset):
     """
     def __init__(self, json_path, 
                  max_sent_len=100, 
-                 min_freq=1, 
+                 min_freq=1,
+                 vocab=None, 
                  build_vocab=True, 
                  save_vocab_path=None,
                  load_vocab_path=None):
         self.data = self._load(json_path)
         self.max_sent_len = max_sent_len
-        if build_vocab:
+        if vocab:
+            self.vocab = vocab
+        elif build_vocab:
             self.vocab = self.build_vocab(self.data, min_freq=min_freq)
             if save_vocab_path:
                 with open(save_vocab_path, 'wb') as f:
