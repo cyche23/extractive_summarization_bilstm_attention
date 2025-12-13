@@ -62,7 +62,7 @@ def main():
     print("Device:", device)
 
     # Build dataset and vocab
-    dataset = SummDataset(args.train_json, build_vocab=True)
+    dataset = SummDataset(args.train_json, build_vocab=True, save_vocab_path="./vocab/vocab.pkl")
     vocab = dataset.vocab
 
     dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, collate_fn=collate_fn)
@@ -78,6 +78,8 @@ def main():
         # save checkpoint
         save_model(model, args.save_path)
         print("Saved model to", args.save_path)
+    
+    # save_model(model, args.save_path)
 
 if __name__ == "__main__":
     main()

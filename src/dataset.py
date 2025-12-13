@@ -6,6 +6,7 @@ import torch
 from torch.utils.data import Dataset
 from collections import Counter
 import random
+import pickle
 
 try:
     # prefer nltk tokenizer for english
@@ -26,15 +27,25 @@ class SummDataset(Dataset):
       { "id": "...", "sentences": [...], "labels": [...], "highlights": [...] }
     Tokenization is performed on the fly during __getitem__ or in collate.
     """
-    def __init__(self, json_path, max_sent_len=100, min_freq=1, build_vocab=True, vocab=None):
+    def __init__(self, json_path, 
+                 max_sent_len=100, 
+                 min_freq=1, 
+                 build_vocab=True, 
+                 save_vocab_path=None,
+                 load_vocab_path=None):
         self.data = self._load(json_path)
         self.max_sent_len = max_sent_len
         if build_vocab:
             self.vocab = self.build_vocab(self.data, min_freq=min_freq)
+            if save_vocab_path:
+                with open(save_vocab_path, 'wb') as f:
+                    pickle.dump(self.vocab, f)
         else:
-            if vocab is None:
-                raise ValueError("vocab required if build_vocab=False")
-            self.vocab = vocab
+            if load_vocab_path:
+                with open(load_vocab_path, 'rb') as f:
+                    self.vocab = pickle.load(f)
+            else:
+                raise ValueError("load_vocab_path required if build_vocab=False")
 
     def _load(self, path):
         with open(path, 'r', encoding='utf8') as f:
@@ -90,39 +101,39 @@ class SummDataset(Dataset):
 
 def collate_fn(batch, pad_idx=0):
     """
-    batch: list of dataset items (one article per element).
-    We return a list-based batch:
-      {
-        "ids": [...],
-        "word_ids": [ LongTensor(num_sent, max_len) for each article ],
-        "lengths": [ LongTensor(num_sent) for each article ],
-        "labels": [ FloatTensor(num_sent) for each article ],
-        "highlights": [...]
-      }
+    修改点：增加了 raw_sents 的传递，供推理模块使用
     """
     ids = []
     word_id_tensors = []
     length_tensors = []
     label_tensors = []
     highlights = []
+    # 新增列表用于存储原始文本
+    raw_sents_list = []
+
     for item in batch:
         ids.append(item["id"])
         sent_ids = item["sent_ids"]
         sent_lens = item["sent_lens"]
+
+        #  获取 Dataset 中的原始句子列表
+        raw_sents_list.append(item.get("sentences", []))
+
         if len(sent_ids) == 0:
-            # empty article
-            word_id_tensors.append(torch.zeros((0,0), dtype=torch.long))
+            word_id_tensors.append(torch.zeros((0, 0), dtype=torch.long))
             length_tensors.append(torch.zeros((0,), dtype=torch.long))
             label_tensors.append(torch.zeros((0,), dtype=torch.float))
             highlights.append(item.get("highlights", []))
             continue
+
         max_len = max(len(s) for s in sent_ids)
         padded = []
         for s in sent_ids:
             padded.append(s + [pad_idx] * (max_len - len(s)))
-        word_id_tensors.append(torch.tensor(padded, dtype=torch.long))  # [num_sent, max_len]
+
+        word_id_tensors.append(torch.tensor(padded, dtype=torch.long))
         length_tensors.append(torch.tensor(sent_lens, dtype=torch.long))
-        label_tensors.append(torch.tensor(item.get("labels", [0]*len(sent_ids)), dtype=torch.float))
+        label_tensors.append(torch.tensor(item.get("labels", [0] * len(sent_ids)), dtype=torch.float))
         highlights.append(item.get("highlights", []))
 
     return {
@@ -130,5 +141,6 @@ def collate_fn(batch, pad_idx=0):
         "word_ids": word_id_tensors,
         "lengths": length_tensors,
         "labels": label_tensors,
-        "highlights": highlights
+        "highlights": highlights,
+        "raw_sents": raw_sents_list  # 返回这个关键数据！
     }
