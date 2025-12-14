@@ -79,7 +79,9 @@ def eval_epoch(model, dataloader, device, strategy="topk"):
                 logits, attn = output
                 vectors = None
 
-            sent_scores = torch.sigmoid(logits)
+            # sent_scores = torch.sigmoid(logits)
+            sent_scores = logits
+            print(sent_scores[0])
 
             # generate summary
             pred_sents = predict_summary(
@@ -156,6 +158,20 @@ def main():
     # model
     model = ExtractiveSummarizer(train_dataset.vocab, embed_dim=300, hidden_size=256, glove_path=args.glove_path).to(device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=0.001)
+    # optimizer = torch.optim.Adam([
+    #     {
+    #         "params": model.embedding.parameters(),
+    #         "lr": 1e-4
+    #     },
+    #     {
+    #         "params": model.encoder.parameters(),
+    #         "lr": 1e-3
+    #     },
+    #     {
+    #         "params": model.attention.parameters(),
+    #         "lr": 3e-3
+    #     },
+    # ], weight_decay=1e-5)
 
     val_scores = eval_epoch(
         model, val_loader, device, strategy=args.val_strategy
