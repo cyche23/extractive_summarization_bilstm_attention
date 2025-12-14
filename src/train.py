@@ -6,6 +6,7 @@ import torch.optim as optim
 import torch.nn as nn
 from tqdm import tqdm
 import os
+import random
 
 from dataset import SummDataset, collate_fn
 from model.model import ExtractiveSummarizer
@@ -15,6 +16,13 @@ import numpy as np
 from inference import predict_summary
 from evaluate import rouge_1, rouge_l
 
+# 设置随机数种子
+def setup_seed(seed):
+     torch.manual_seed(seed)
+     torch.cuda.manual_seed_all(seed)
+     np.random.seed(seed)
+     random.seed(seed)
+     torch.backends.cudnn.deterministic = True
 
 def train_epoch(model, dataloader, optimizer, device):
     model.train()
@@ -38,7 +46,7 @@ def train_epoch(model, dataloader, optimizer, device):
             if word_ids.numel() == 0:
                 continue
 
-            logits, attn = model(word_ids, lengths)  # [num_sent], [num_sent]
+            logits = model(word_ids, lengths)  # [num_sent]
             loss = criterion(logits, labels)
             batch_loss += loss
             count += 1
@@ -73,10 +81,10 @@ def eval_epoch(model, dataloader, device, strategy="topk"):
 
             # forward
             output = model(word_ids, lengths)
-            if len(output) == 3:
-                logits, attn, vectors = output
+            if len(output) == 2:
+                logits, vectors = output
             else:
-                logits, attn = output
+                logits = output
                 vectors = None
 
             sent_scores = torch.sigmoid(logits)
@@ -113,8 +121,11 @@ def main():
     parser.add_argument("--device", type=str, default=None)
     parser.add_argument("--val_json", required=True)
     parser.add_argument("--val_strategy", default="topk") # strategy: 'topk', 'dynamic', 'mmr', 'dynamic_mmr'
+    parser.add_argument("--vocab_path", type=str, default=None)
 
     args = parser.parse_args()
+
+    setup_seed(1)
 
     device = args.device or ("cuda" if torch.cuda.is_available() else "cpu")
     print("Device:", device)
@@ -125,11 +136,18 @@ def main():
     # dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, collate_fn=collate_fn)
 
     # train dataset (build vocab)
-    train_dataset = SummDataset(
-        args.train_json,
-        build_vocab=True,
-        save_vocab_path="./vocab/vocab.pkl"
-    )
+    if args.vocab_path:
+        train_dataset = SummDataset(
+            args.train_json,
+            build_vocab=False,
+            load_vocab_path=args.vocab_path
+        )
+    else:
+        train_dataset = SummDataset(
+            args.train_json,
+            build_vocab=True,
+            save_vocab_path="./vocab/vocab.pkl"
+        )
 
     # val dataset (load vocab!)
     val_dataset = SummDataset(
@@ -156,6 +174,22 @@ def main():
     # model
     model = ExtractiveSummarizer(train_dataset.vocab, embed_dim=300, hidden_size=256, glove_path=args.glove_path).to(device)
     optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=0.001)
+    # optimizer = torch.optim.Adam([
+    #     {
+    #         "params": model.embedding.parameters(),
+    #         "lr": 1e-4
+    #     },
+    #     {
+    #         "params": model.encoder.parameters(),
+    #         "lr": 1e-3
+    #     },
+    #     {
+    #         "params": model.attention.parameters(),
+    #         "lr": 3e-3
+    #     },
+    # ], weight_decay=1e-5)
+
+
 
     val_scores = eval_epoch(
         model, val_loader, device, strategy=args.val_strategy

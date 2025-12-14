@@ -6,6 +6,7 @@ import torch.nn.functional as F
 from .embedding import GloveEmbedding
 from .bilstm_encoder import BiLSTMEncoder
 from .attention import AdditiveAttention
+from .dotattention import DotProductAttention
 
 class ExtractiveSummarizer(nn.Module):
     """
@@ -19,7 +20,14 @@ class ExtractiveSummarizer(nn.Module):
         self.embedding = GloveEmbedding(vocab, embedding_dim=embed_dim, glove_path=glove_path, trainable=embed_trainable)
         self.encoder = BiLSTMEncoder(embed_dim, hidden_size)
         self.attention = AdditiveAttention(hidden_size * 2)
-        # self.classifier = nn.Linear(hidden_size * 2, 1)
+        # self.attention = DotProductAttention(hidden_size * 2)
+        self.sigmoid = nn.Sigmoid()
+        # self.classifier = nn.Sequential(
+        #     nn.Linear(hidden_size * 2, hidden_size),
+        #     nn.ReLU(),
+        #     nn.Dropout(0.2),
+        #     nn.Linear(hidden_size, 1)
+        # )
 
     def forward(self, word_id_tensor, lengths):
         """
@@ -34,9 +42,15 @@ class ExtractiveSummarizer(nn.Module):
 
         embeds = self.embedding(word_id_tensor)  # [num_sent, max_len, embed_dim]
         sent_vecs = self.encoder(embeds, lengths)  # [num_sent, hidden*2]
+        # print("sent_vecs:", sent_vecs)
+
         # attention weights (unused in loss but useful for inference/selection)
-        logits = self.attention(sent_vecs)  # [num_sent]
-        # logits = self.classifier(sent_vecs).squeeze(-1)  # [num_sent]
-        atten_weights = F.softmax(logits, dim=0)        # 注意力权重
+        atten_score = self.attention(sent_vecs)  # [num_sent]
+        atten_weight = self.sigmoid(atten_score)  # [num_sent], 0~1
+
         # Optionally combine attn and logits; here we keep logits as classification scores.
-        return logits, atten_weights
+        # logits = self.sigmoid(atten_score)
+        # logits = self.classifier(atten_weight*sent_vecs).squeeze(-1)  # [num_sent]
+        logits = atten_weight
+
+        return logits

@@ -8,15 +8,49 @@ from collections import Counter
 import random
 import pickle
 
+# try:
+#     # prefer nltk tokenizer for english
+#     import nltk
+#     nltk.data.find('tokenizers/punkt')
+#     from nltk.tokenize import word_tokenize
+# except Exception:
+#     # fallback to simple split
+#     def word_tokenize(x):
+#         return x.split()
+
+# ==========================================
+# [升级] 使用 spaCy 强力分词器
+# ==========================================
 try:
-    # prefer nltk tokenizer for english
-    import nltk
-    nltk.data.find('tokenizers/punkt')
-    from nltk.tokenize import word_tokenize
-except Exception:
-    # fallback to simple split
-    def word_tokenize(x):
-        return x.split()
+    import spacy
+
+    # 加载英文模型，禁用 parser, ner 等组件以极大提升速度
+    # 如果报错，请在终端运行: python -m spacy download en_core_web_sm
+    spacy_nlp = spacy.load("en_core_web_sm", disable=["parser", "ner", "tagger", "lemmatizer"])
+except ImportError:
+    print("[Error] 请安装 spacy: pip install spacy")
+    exit()
+except OSError:
+    print("[Error] 请下载 spacy 模型: python -m spacy download en_core_web_sm")
+    exit()
+
+def word_tokenize(text):
+    """
+    使用 spaCy 分词 (针对 GloVe 840B 优化)
+    自动处理: 标点粘连 (apple.), 缩写 (don't), 奇怪符号
+    """
+    if not isinstance(text, str):
+        return []
+
+    # 1. 基础清洗: 去除多余的 Tab、换行、连续空格
+    text = " ".join(text.split())
+
+    # 2. spaCy 智能分词
+    doc = spacy_nlp(text)
+
+    # 3. 返回 Token 文本列表
+    return [token.text for token in doc]
+
 
 PAD = "<pad>"
 UNK = "<unk>"
@@ -47,6 +81,7 @@ class SummDataset(Dataset):
             if load_vocab_path:
                 with open(load_vocab_path, 'rb') as f:
                     self.vocab = pickle.load(f)
+                print(f"Load vocab size: {len(self.vocab)}")
             else:
                 raise ValueError("load_vocab_path required if build_vocab=False")
 

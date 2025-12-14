@@ -15,6 +15,7 @@ class AdditiveAttention(nn.Module):
         self.U = nn.Linear(hidden_dim, hidden_dim, bias=True)
         self.v = nn.Linear(hidden_dim, 1, bias=False)
         # query vector parameter
+        # problem：query过大导致生成的注意力权重完全一样
         self.query = nn.Parameter(torch.randn(hidden_dim))
         # self.query = nn.Parameter(torch.empty(hidden_dim))
         # nn.init.xavier_uniform_(self.query.data)

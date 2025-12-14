@@ -25,8 +25,8 @@ nltk.download('punkt')
 
 # RAW_CNN_PATH = "data/raw/cnn/stories/"
 # RAW_DM_PATH = "data/raw/dailymail/stories/"
-RAW_PATH = "../data/raw_stories_mini/"
-OUTPUT_DIR = "../data/labeled_stories_mini/"
+RAW_PATH = "../data/test_data "
+OUTPUT_DIR = "../data/test_data "
 
 def process_single_story(fp):
     """单个文件的完整处理（用于多进程）"""
@@ -61,8 +61,49 @@ def clean_text(text):
     for p in patterns:
         text = re.sub(p, "", text, flags=re.IGNORECASE)
 
+    # text = normalize_text_for_glove(text)
+
     # 去除多余空格
     text = re.sub(r"\s+", " ", text)
+    return text.strip()
+
+
+def normalize_text_for_glove(text):
+    """
+    Normalize text to improve GloVe coverage
+    """
+    # ---------- 2. 货币标准化 ----------
+    # £80,000 -> <mny>
+    text = re.sub(r"£\s?([\d,]+)", lambda m: "£ " + m.group(1).replace(",", ""), text)
+
+    # ---------- 3. 数字去逗号 ----------
+    # 80,000 -> 80000
+    text = re.sub(r"(\d),(\d)", r"\1\2", text)
+
+    # ---------- 4. 连字符拆分 ----------
+    # father-of-three -> father of three
+    text = re.sub(r"-(\w+)", r" \1", text)
+
+    # 分离开头的单引号（仅当后面是字母）
+    text = re.sub(r"^'([a-zA-Z])", r"\1", text)
+    text = re.sub(r"(\s)'([a-zA-Z])", r"\1\2", text)
+    text = re.sub(r"([a-zA-Z])'(\s)", r"\1\2", text)
+
+    # 分离单词末尾的标点（., !, ?, …, ;, : 等）
+    # 但保留缩写如 U.S.A. 不被破坏（可选，此处简化处理）
+    text = re.sub(r"([a-zA-Z])\.(\s)", r"\1 .\2", text)
+    text = re.sub(r"([a-zA-Z])\!(\s)", r"\1 !\2", text)
+    text = re.sub(r"([a-zA-Z])\?(\s)", r"\1 ?\2", text)
+    text = re.sub(r"([a-zA-Z])…(\s)", r"\1 …\2", text)
+    text = re.sub(r"([a-zA-Z]);(\s)", r"\1 ;\2", text)
+    text = re.sub(r"([a-zA-Z]):(\s)", r"\1 :\2", text)
+
+    # 确保时间格式（如 07:07）前后有空格（避免粘连）
+    text = re.sub(r"(\d{1,2}:\d{2})", r" \1 ", text)
+
+    # ---------- 5. 多空格 ----------
+    text = re.sub(r"\s+", " ", text)
+
     return text.strip()
 
 

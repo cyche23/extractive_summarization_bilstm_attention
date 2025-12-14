@@ -96,6 +96,7 @@ def main():
     scores = {"r1_f": [], "rl_f": []}
     print(f"Start Evaluation using strategy: [{args.strategy}]")
 
+    step_print=1
     with torch.no_grad():
         for batch in tqdm(dataloader):
             word_ids = batch["word_ids"]  # [B, Sent, Word] (注意这里要根据collate_fn实际key调整)
