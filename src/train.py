@@ -218,7 +218,7 @@ def main():
             "params": model.attention.parameters(),
             "lr": 1e-3
         },
-    ], weight_decay=1e-5)
+    ], weight_decay=1e-4)
 
     val_scores = eval_epoch(
         model, val_loader, device, strategy=args.val_strategy
