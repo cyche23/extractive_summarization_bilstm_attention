@@ -208,7 +208,7 @@ def main():
     optimizer = torch.optim.Adam([
         {
             "params": model.embedding.parameters(),
-            "lr": 5e-4
+            "lr": 2e-4
         },
         {
             "params": model.encoder.parameters(),
