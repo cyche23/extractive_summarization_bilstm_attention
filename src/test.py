@@ -5,11 +5,12 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 import numpy as np
 import random
+from rouge_score import rouge_scorer  # ✅ 新增导入
 
 from dataset import SummDataset, collate_fn
 from model.model import ExtractiveSummarizer
 from inference import predict_summary
-from evaluate import rouge_1, rouge_l
+# ❌ 移除: from evaluate import rouge_1, rouge_l
 from utils import load_model
 
 
@@ -33,6 +34,9 @@ def test_epoch(model, dataloader, device, strategy="topk"):
 
     r1_f, rl_f = [], []
 
+    # ✅ 初始化 ROUGE scorer（只计算 rouge1 和 rougeL 的 F1）
+    scorer = rouge_scorer.RougeScorer(['rouge1', 'rougeL'], use_stemmer=False)
+
     for batch in tqdm(dataloader, desc="Test"):
         ids_list = batch["word_ids"]
         lens_list = batch["lengths"]
@@ -54,10 +58,11 @@ def test_epoch(model, dataloader, device, strategy="topk"):
                 logits = output
                 vectors = None
 
-            sent_scores = torch.sigmoid(logits)
+            # sent_scores = torch.sigmoid(logits)
+            sent_scores = logits
 
-            # 生成摘要
-            pred_sents = predict_summary(
+            # 生成摘要（注意：predict_summary 应返回句子列表）
+            pred_sents, _ = predict_summary(  # ⚠️ 注意：如果你的 predict_summary 返回 (sents, indices)
                 article_sents=raw_sents_batch[i],
                 sent_scores=sent_scores,
                 sent_vectors=vectors,
@@ -66,15 +71,20 @@ def test_epoch(model, dataloader, device, strategy="topk"):
 
             ref_sents = refs_batch[i]
 
-            # ROUGE
-            print("Predicted Scores:")
-            for sent in sent_scores:
-                print(f"  {sent}")
-            r1 = rouge_1(pred_sents, ref_sents)
-            rl = rouge_l(pred_sents, ref_sents)
+            # 调试打印（可选）
+            # print("Predicted Scores:")
+            # for sent in sent_scores:
+            #     print(f"  {sent}")
 
-            r1_f.append(r1["f"])
-            rl_f.append(rl["f"])
+            # ✅ 将句子列表转为字符串（用换行符分隔，符合 ROUGE 默认行为）
+            pred_text = "\n".join(pred_sents)
+            ref_text = "\n".join(ref_sents)
+
+            # ✅ 计算 ROUGE（注意顺序：prediction, target）
+            scores = scorer.score(pred_text, ref_text)
+
+            r1_f.append(scores['rouge1'].fmeasure)
+            rl_f.append(scores['rougeL'].fmeasure)
 
     return {
         "r1_f": float(np.mean(r1_f)) if r1_f else 0.0,

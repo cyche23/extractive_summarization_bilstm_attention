@@ -78,7 +78,7 @@ def evaluate_dataset(samples):
 if __name__ == "__main__":
     # 示例数据（可替换为从文件中读取）
     samples = []
-    with open("/root/codes/NLP/extractive_summarization_bilstm_attention/data/labeled_stories_mini/test.json", 'r', encoding='utf8') as f:
+    with open("/root/codes/NLP/extractive_summarization_bilstm_attention/data/labeled_stories_mini/train.json", 'r', encoding='utf8') as f:
             samples = json.load(f)
 
     rouge_scores = evaluate_dataset(samples)

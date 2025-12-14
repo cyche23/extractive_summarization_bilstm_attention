@@ -6,6 +6,7 @@ import torch.nn.functional as F
 from .embedding import GloveEmbedding
 from .bilstm_encoder import BiLSTMEncoder
 from .attention import AdditiveAttention
+from .EnhancedSummaryDecoder import EnhancedSummaryDecoder
 
 class ExtractiveSummarizer(nn.Module):
     """
@@ -20,6 +21,7 @@ class ExtractiveSummarizer(nn.Module):
         self.encoder = BiLSTMEncoder(embed_dim, hidden_size)
         self.attention = AdditiveAttention(hidden_size * 2)
         # self.classifier = nn.Linear(hidden_size * 2, 1)
+        # self.attention = EnhancedSummaryDecoder(input_dim=hidden_size * 2)
 
     def forward(self, word_id_tensor, lengths):
         """

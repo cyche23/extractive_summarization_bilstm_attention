@@ -107,12 +107,6 @@ def eval_epoch(model, dataloader, device, strategy="topk"):
                 strategy=strategy
             )
 
-            if count < 10:
-                record_idx.append(selected_indices)
-                record_label.append([k for k, val in enumerate(labels_list[i]) if val == 1])
-                count += 1
-
-
             ref_sents = refs_batch[i]
 
             # r1 = rouge_1(pred_sents, ref_sents)
@@ -124,17 +118,20 @@ def eval_epoch(model, dataloader, device, strategy="topk"):
             ref_text = "\n".join(ref_sents)
 
             # 计算 ROUGE
-            scores = scorer.score(ref_text, pred_text)  # 注意：rouge_score 要求 (target, prediction)
+            # scores = scorer.score(ref_text, pred_text)  # 注意：rouge_score 要求 (target, prediction)
             # 但注意：有些习惯是 scorer.score(prediction, target)，请核对！
             # 实际上：rouge_scorer 的 scorer.score(target, prediction) 是错误的！
             # 正确顺序是：scorer.score(prediction, target)
             # 参见官方文档：https://github.com/google-research/google-research/blob/master/rouge/rouge_scorer.py#L85
-
-            # ✅ 正确顺序：预测在前，参考在后
             scores = scorer.score(pred_text, ref_text)
 
             r1_f.append(scores['rouge1'].fmeasure)
             rl_f.append(scores['rougeL'].fmeasure)
+
+            if count < 10:
+                record_idx.append(selected_indices)
+                record_label.append([k for k, val in enumerate(labels_list[i]) if val == 1])
+                count += 1
         
     print("Record Index and Score:")
     for i in range(count):
@@ -151,7 +148,7 @@ def main():
     parser.add_argument("--glove_path", required=False, default=None)
     parser.add_argument("--epochs", type=int, default=5)
     parser.add_argument("--batch_size", type=int, default=8)  # number of articles per batch
-    parser.add_argument("--lr", type=float, default=1e-3)
+    # parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--save_path", type=str, default="checkpoints/model.pt")
     parser.add_argument("--device", type=str, default=None)
     parser.add_argument("--val_json", required=True)
@@ -160,7 +157,7 @@ def main():
 
     args = parser.parse_args()
 
-    # setup_seed(42)
+    setup_seed(1)
     device = args.device or ("cuda" if torch.cuda.is_available() else "cpu")
     print("Device:", device)
 
@@ -211,7 +208,7 @@ def main():
     optimizer = torch.optim.Adam([
         {
             "params": model.embedding.parameters(),
-            "lr": 1e-4
+            "lr": 5e-4
         },
         {
             "params": model.encoder.parameters(),
@@ -219,7 +216,7 @@ def main():
         },
         {
             "params": model.attention.parameters(),
-            "lr": 3e-3
+            "lr": 1e-3
         },
     ], weight_decay=1e-5)
 
