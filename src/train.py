@@ -6,6 +6,7 @@ import torch.optim as optim
 import torch.nn as nn
 from tqdm import tqdm
 import os
+import random
 
 from dataset import SummDataset, collate_fn
 from model.model import ExtractiveSummarizer
@@ -15,6 +16,14 @@ import numpy as np
 from inference import predict_summary
 # from evaluate import rouge_1, rouge_l
 from rouge_score import rouge_scorer
+
+# 设置随机数种子
+def setup_seed(seed):
+     torch.manual_seed(seed)
+     torch.cuda.manual_seed_all(seed)
+     np.random.seed(seed)
+     random.seed(seed)
+     torch.backends.cudnn.deterministic = True
 
 
 scorer = rouge_scorer.RougeScorer(['rouge1', 'rougeL'], use_stemmer=False)
@@ -147,9 +156,11 @@ def main():
     parser.add_argument("--device", type=str, default=None)
     parser.add_argument("--val_json", required=True)
     parser.add_argument("--val_strategy", default="topk") # strategy: 'topk', 'dynamic', 'mmr', 'dynamic_mmr'
+    parser.add_argument("--vocab_path", type=str, default=None)
 
     args = parser.parse_args()
 
+    # setup_seed(42)
     device = args.device or ("cuda" if torch.cuda.is_available() else "cpu")
     print("Device:", device)
 

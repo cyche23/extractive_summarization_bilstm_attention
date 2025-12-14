@@ -47,6 +47,7 @@ class SummDataset(Dataset):
             if load_vocab_path:
                 with open(load_vocab_path, 'rb') as f:
                     self.vocab = pickle.load(f)
+                print(f"Load vocab size: {len(self.vocab)}")
             else:
                 raise ValueError("load_vocab_path required if build_vocab=False")
 
