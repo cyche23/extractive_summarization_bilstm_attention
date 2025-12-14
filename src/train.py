@@ -13,8 +13,11 @@ from utils import save_model
 
 import numpy as np
 from inference import predict_summary
-from evaluate import rouge_1, rouge_l
+# from evaluate import rouge_1, rouge_l
+from rouge_score import rouge_scorer
 
+
+scorer = rouge_scorer.RougeScorer(['rouge1', 'rougeL'], use_stemmer=False)
 
 def train_epoch(model, dataloader, optimizer, device):
     model.train()
@@ -58,11 +61,16 @@ def eval_epoch(model, dataloader, device, strategy="topk"):
 
     r1_f, rl_f = [], []
 
+    record_label = []
+    record_idx = []
+    count=0
+
     for batch in tqdm(dataloader, desc="Val"):
         ids_list = batch["word_ids"]
         lens_list = batch["lengths"]
         raw_sents_batch = batch["raw_sents"]
         refs_batch = batch["highlights"]
+        labels_list = batch["labels"]
 
         for i in range(len(ids_list)):
             word_ids = ids_list[i].to(device)
@@ -81,23 +89,47 @@ def eval_epoch(model, dataloader, device, strategy="topk"):
 
             # sent_scores = torch.sigmoid(logits)
             sent_scores = logits
-            print(sent_scores[0])
 
             # generate summary
-            pred_sents = predict_summary(
+            pred_sents, selected_indices = predict_summary(
                 article_sents=raw_sents_batch[i],
                 sent_scores=sent_scores,
                 sent_vectors=vectors,
                 strategy=strategy
             )
 
+            if count < 10:
+                record_idx.append(selected_indices)
+                record_label.append([k for k, val in enumerate(labels_list[i]) if val == 1])
+                count += 1
+
+
             ref_sents = refs_batch[i]
 
-            r1 = rouge_1(pred_sents, ref_sents)
-            rl = rouge_l(pred_sents, ref_sents)
+            # r1 = rouge_1(pred_sents, ref_sents)
+            # rl = rouge_l(pred_sents, ref_sents)
+            # r1_f.append(r1["f"])
+            # rl_f.append(rl["f"])
+        
+            pred_text = "\n".join(pred_sents)
+            ref_text = "\n".join(ref_sents)
 
-            r1_f.append(r1["f"])
-            rl_f.append(rl["f"])
+            # 计算 ROUGE
+            scores = scorer.score(ref_text, pred_text)  # 注意：rouge_score 要求 (target, prediction)
+            # 但注意：有些习惯是 scorer.score(prediction, target)，请核对！
+            # 实际上：rouge_scorer 的 scorer.score(target, prediction) 是错误的！
+            # 正确顺序是：scorer.score(prediction, target)
+            # 参见官方文档：https://github.com/google-research/google-research/blob/master/rouge/rouge_scorer.py#L85
+
+            # ✅ 正确顺序：预测在前，参考在后
+            scores = scorer.score(pred_text, ref_text)
+
+            r1_f.append(scores['rouge1'].fmeasure)
+            rl_f.append(scores['rougeL'].fmeasure)
+        
+    print("Record Index and Score:")
+    for i in range(count):
+        print(record_idx[i], record_label[i])
 
     return {
         "r1_f": float(np.mean(r1_f)) if r1_f else 0.0,
@@ -127,11 +159,18 @@ def main():
     # dataloader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, collate_fn=collate_fn)
 
     # train dataset (build vocab)
-    train_dataset = SummDataset(
-        args.train_json,
-        build_vocab=True,
-        save_vocab_path="./vocab/vocab.pkl"
-    )
+    if args.vocab_path:
+        train_dataset = SummDataset(
+            args.train_json,
+            build_vocab=False,
+            load_vocab_path=args.vocab_path
+        )
+    else:
+        train_dataset = SummDataset(
+            args.train_json,
+            build_vocab=True,
+            save_vocab_path="./vocab/vocab.pkl"
+        )
 
     # val dataset (load vocab!)
     val_dataset = SummDataset(
@@ -157,21 +196,21 @@ def main():
 
     # model
     model = ExtractiveSummarizer(train_dataset.vocab, embed_dim=300, hidden_size=256, glove_path=args.glove_path).to(device)
-    optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=0.001)
-    # optimizer = torch.optim.Adam([
-    #     {
-    #         "params": model.embedding.parameters(),
-    #         "lr": 1e-4
-    #     },
-    #     {
-    #         "params": model.encoder.parameters(),
-    #         "lr": 1e-3
-    #     },
-    #     {
-    #         "params": model.attention.parameters(),
-    #         "lr": 3e-3
-    #     },
-    # ], weight_decay=1e-5)
+    # optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=0.001)
+    optimizer = torch.optim.Adam([
+        {
+            "params": model.embedding.parameters(),
+            "lr": 1e-4
+        },
+        {
+            "params": model.encoder.parameters(),
+            "lr": 1e-3
+        },
+        {
+            "params": model.attention.parameters(),
+            "lr": 3e-3
+        },
+    ], weight_decay=1e-5)
 
     val_scores = eval_epoch(
         model, val_loader, device, strategy=args.val_strategy

@@ -97,4 +97,4 @@ def predict_summary(article_sents, sent_scores, sent_vectors=None, strategy="top
             sent = " ".join(words[:50])
         final_sents.append(sent)
 
-    return final_sents
+    return final_sents, selected_indices
