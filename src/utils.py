@@ -42,3 +42,5 @@ def print_monitor_info(record_idx, record_label, logits_list, count):
         print(logits_list[i])
         
     print("="*20 + " [Monitor Info End] " + "="*20 + "\n")
+
+    

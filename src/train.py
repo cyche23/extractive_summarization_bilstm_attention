@@ -8,6 +8,7 @@ from tqdm import tqdm
 import os
 import random
 import sys
+import numpy as np
 
 # 引入 dataset 和 model
 from dataset import SummDataset, collate_fn
@@ -15,7 +16,6 @@ from model.model import ExtractiveSummarizer
 from utils import save_model, print_monitor_info
 from inference import predict_summary
 from rouge_score import rouge_scorer
-import numpy as np
 
 # 设置随机数种子
 def setup_seed(seed):
@@ -27,10 +27,71 @@ def setup_seed(seed):
 
 scorer = rouge_scorer.RougeScorer(['rouge1', 'rougeL'], use_stemmer=False)
 
+# ========================================================
+# [新增模块] 模型权重与梯度健康监测
+# ========================================================
+def monitor_model_weights(model, epoch):
+    """
+    监测模型各层的权重分布、梯度情况和异常值。
+    重点关注: Decoder (分类头) 是否坍塌，LSTM 梯度是否消失。
+    """
+    print(f"\n{'='*20} Model Health Monitor (Epoch {epoch}) {'='*20}")
+    print(f"{'Layer Name':<40} | {'Mean':<8} | {'Std':<8} | {'Grad Norm':<10} | {'Status'} | {'Slice (First 5)'}")
+    print("-" * 110)
+
+    has_nan = False
+    
+    for name, param in model.named_parameters():
+        if param.requires_grad:
+            data = param.data
+            grad = param.grad
+            
+            # 1. 基础统计
+            mean_val = data.mean().item()
+            std_val = data.std().item()
+            min_val = data.min().item()
+            max_val = data.max().item()
+            
+            # 2. 梯度统计
+            grad_norm = 0.0
+            if grad is not None:
+                grad_norm = grad.norm().item()
+            
+            # 3. 状态检查
+            status = "OK"
+            if torch.isnan(data).any() or torch.isinf(data).any():
+                status = "NaN/Inf DETECTED!"
+                has_nan = True
+            elif std_val < 1e-6:
+                status = "COLLAPSED (Zero Var)"
+            elif grad is not None and grad_norm < 1e-9:
+                status = "Vanishing Grad"
+            
+            # 4. 切片采样 (取前5个数值)
+            # view(-1) 把 tensor 展平，避免维度不同导致的打印问题
+            slice_vals = data.view(-1)[:5].cpu().numpy()
+            slice_str = str(np.round(slice_vals, 4))
+
+            # 仅打印关键层（为了避免刷屏，过滤掉太细碎的bias，但保留decoder的所有参数）
+            # 或者你可以选择打印所有层
+            is_important = "decoder" in name or "sent_lstm" in name or "encoder" in name
+            
+            if is_important:
+                print(f"{name:<40} | {mean_val:8.4f} | {std_val:8.4f} | {grad_norm:10.4f} | {status:<15} | {slice_str}")
+
+    print("-" * 110)
+    if has_nan:
+        print("[CRITICAL WARNING] Model parameters contain NaN or Inf! Training is likely broken.")
+        # 可以选择在这里 sys.exit(1)
+    print("\n")
+
+
 def train_epoch(model, dataloader, optimizer, device):
     model.train()
     total_loss = 0.0
-    criterion = nn.BCEWithLogitsLoss()
+    # 注意：如果使用了 pos_weight，请确保在这里正确传递，或者在外部定义 criterion
+    criterion = nn.BCEWithLogitsLoss() 
+    
     for batch in tqdm(dataloader, desc="Train"):
         ids = batch["ids"]
         word_ids_list = batch["word_ids"]
@@ -48,15 +109,26 @@ def train_epoch(model, dataloader, optimizer, device):
             if word_ids.numel() == 0:
                 continue
 
+            # Forward
             logits, attn = model(word_ids, lengths)
+            
+            # Loss Calculation
             loss = criterion(logits, labels)
             batch_loss += loss
             count += 1
 
         if count == 0:
             continue
+            
+        # Average loss over the batch (document batch)
         batch_loss = batch_loss / count
+        
+        # Backward
         batch_loss.backward()
+        
+        # [可选] 梯度裁剪，防止梯度爆炸 (Exploding Gradients)
+        # torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
+        
         optimizer.step()
 
         total_loss += batch_loss.item()
@@ -72,7 +144,7 @@ def eval_epoch(model, dataloader, device, strategy="topk", debug=True):
     record_idx = []
     logits_list = []
     count = 0
-    monitor_limit = 10 
+    monitor_limit = 5 # 稍微减少一点打印量
 
     for batch in tqdm(dataloader, desc="Val"):
         ids_list = batch["word_ids"]
@@ -127,12 +199,6 @@ def eval_epoch(model, dataloader, device, strategy="topk", debug=True):
     }
 
 def get_cache_path(data_prefix):
-    """
-    根据数据前缀生成缓存路径。
-    例如: prefix="data/train" -> cache="data/train.pkl"
-    """
-    # 简单的直接拼接，这对于 prefix 形式是安全的
-    # 它会在 data 目录下生成 train.pkl
     return data_prefix + ".pkl"
 
 def main():
@@ -145,8 +211,6 @@ def main():
     parser.add_argument("--save_path", type=str, default="checkpoints/model.pt")
     parser.add_argument("--device", type=str, default=None)
     parser.add_argument("--val_strategy", default="topk") 
-    
-    # 为了兼容旧脚本保留参数，但不使用
     parser.add_argument("--vocab_path", type=str, default=None)
 
     args = parser.parse_args()
@@ -156,8 +220,6 @@ def main():
     print("Device:", device)
 
     # ================= 1. 路径处理与自洽性检查 =================
-    
-    # 自动生成缓存路径
     train_cache = get_cache_path(args.train_json)
     val_cache = get_cache_path(args.val_json)
 
@@ -166,20 +228,12 @@ def main():
     print(f"    Val   Prefix: {args.val_json}   -> Cache: {val_cache}")
 
     # ================= 2. 加载数据集 =================
-
-    # 加载训练集
-    # 如果 train.pkl 存在，直接加载；否则读取 train.*.json 并构建词表
     train_dataset = SummDataset(
         args.train_json,
         build_vocab=True,
         cache_path=train_cache
     )
 
-    # 加载验证集
-    # 关键逻辑：这里传入 train_dataset.vocab
-    # dataset.py 内部逻辑：
-    #   - 如果 val_cache 存在：直接加载 val_cache (忽略传入的 vocab) -> 潜在风险点
-    #   - 如果 val_cache 不存在：使用传入的 vocab 处理数据 -> 安全
     val_dataset = SummDataset(
         args.val_json,
         vocab=train_dataset.vocab,
@@ -187,33 +241,16 @@ def main():
         cache_path=val_cache
     )
 
-    # ================= 3. 关键 BUG 防御：词表一致性检查 =================
-    # 如果 Train 重新生成了(新词表)，但 Val 读取了旧 Cache(旧词表)，这里会检测出来
-    
+    # ================= 3. 词表检查 =================
     vocab_size_train = len(train_dataset.vocab)
     vocab_size_val = len(val_dataset.vocab)
-    
     print(f"[*] Vocab Check: Train={vocab_size_train}, Val={vocab_size_val}")
     
-    # 检查1: 词表大小必须一致
     if vocab_size_train != vocab_size_val:
-        print("\n" + "!"*50)
-        print("[CRITICAL ERROR] Vocab size mismatch detected!")
-        print(f"Train vocab: {vocab_size_train}, Val vocab (from cache): {vocab_size_val}")
-        print("Reason: You likely rebuilt the Train Cache but kept an old Val Cache.")
-        print(f"Fix: Please delete '{val_cache}' and restart.")
-        print("!"*50 + "\n")
-        sys.exit(1) # 强制退出，防止训练出无意义的模型
-
-    # 检查2: 随机抽查 Token ID 一致性 (更深层的检查)
-    # 检查 <unk> 和 <pad> 是否一致，或者随机词
-    test_token = "<unk>"
-    if train_dataset.vocab.get(test_token) != val_dataset.vocab.get(test_token):
-        print(f"[Error] Token '{test_token}' ID mismatch between train and val datasets.")
+        print("[CRITICAL ERROR] Vocab size mismatch detected! Please delete val cache.")
         sys.exit(1)
 
     # ================= 4. 构建 Loader 与模型 =================
-
     train_loader = DataLoader(
         train_dataset,
         batch_size=args.batch_size,
@@ -236,15 +273,14 @@ def main():
     ).to(device)
 
     # 优化器配置
+    # 注意：这里我们使用 model.decoder.parameters() 而不是 model.attention
     optimizer = torch.optim.Adam([
         {"params": model.embedding.parameters(), "lr": 2e-4},
-        {"params": model.encoder.parameters(), "lr": 1e-4},
-        {"params": model.decoder.parameters(), "lr": 1e-4},
+        {"params": model.encoder.parameters(), "lr": 1e-4}, # Encoder 学习率
+        {"params": model.decoder.parameters(), "lr": 1e-4}, # Decoder 学习率 (如果发现不收敛，可以尝试改回 1e-3)
     ], weight_decay=1e-4)
 
     # ================= 5. 训练循环 =================
-    
-    # 初始评估
     print("\nInitial Evaluation:")
     val_scores = eval_epoch(model, val_loader, device, strategy=args.val_strategy, debug=True)
     print(f"Init ROUGE-1: {val_scores['r1_f']:.4f} | ROUGE-L: {val_scores['rl_f']:.4f}")
@@ -253,10 +289,14 @@ def main():
     for epoch in range(1, args.epochs + 1):
         print(f"\nEpoch {epoch}/{args.epochs}")
 
+        # 1. 训练
         train_loss = train_epoch(model, train_loader, optimizer, device)
         print(f"Epoch {epoch} loss: {train_loss:.4f}")
 
-        # 验证时开启 debug=True 以便观察 monitor info
+        # 2. [新增] 监测模型健康状态 (在验证之前检查)
+        monitor_model_weights(model, epoch)
+
+        # 3. 验证
         val_scores = eval_epoch(model, val_loader, device, strategy=args.val_strategy, debug=True)
         print(f"ROUGE-1: {val_scores['r1_f']:.4f} | ROUGE-L: {val_scores['rl_f']:.4f}")
 
