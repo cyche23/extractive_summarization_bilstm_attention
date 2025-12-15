@@ -10,7 +10,7 @@ import random
 
 from dataset import SummDataset, collate_fn
 from model.model import ExtractiveSummarizer
-from utils import save_model
+from utils import save_model, print_monitor_info
 
 import numpy as np
 from inference import predict_summary
@@ -64,16 +64,97 @@ def train_epoch(model, dataloader, optimizer, device):
         total_loss += batch_loss.item()
     return total_loss
 
+# @torch.no_grad()
+# def eval_epoch(model, dataloader, device, strategy="topk"):
+#     model.eval()
+
+#     r1_f, rl_f = [], []
+
+#     record_label = []
+#     record_idx = []
+#     logits_list = []
+#     count=0
+
+#     for batch in tqdm(dataloader, desc="Val"):
+#         ids_list = batch["word_ids"]
+#         lens_list = batch["lengths"]
+#         raw_sents_batch = batch["raw_sents"]
+#         refs_batch = batch["highlights"]
+#         labels_list = batch["labels"]
+
+#         for i in range(len(ids_list)):
+#             word_ids = ids_list[i].to(device)
+#             lengths = lens_list[i].to(device)
+
+#             if word_ids.numel() == 0:
+#                 continue
+
+#             # forward
+#             output = model(word_ids, lengths)
+#             if len(output) == 3:
+#                 logits, attn, vectors = output
+#             else:
+#                 logits, attn = output
+#                 vectors = None
+
+#             # sent_scores = torch.sigmoid(logits)
+#             sent_scores = logits
+
+#             # generate summary
+#             pred_sents, selected_indices = predict_summary(
+#                 article_sents=raw_sents_batch[i],
+#                 sent_scores=sent_scores,
+#                 sent_vectors=vectors,
+#                 strategy=strategy
+#             )
+
+#             ref_sents = refs_batch[i]
+
+#             # r1 = rouge_1(pred_sents, ref_sents)
+#             # rl = rouge_l(pred_sents, ref_sents)
+#             # r1_f.append(r1["f"])
+#             # rl_f.append(rl["f"])
+        
+#             pred_text = "\n".join(pred_sents)
+#             ref_text = "\n".join(ref_sents)
+
+#             # 计算 ROUGE
+#             scores = scorer.score(pred_text, ref_text)
+
+#             r1_f.append(scores['rouge1'].fmeasure)
+#             rl_f.append(scores['rougeL'].fmeasure)
+
+#             if count < 10:
+#                 record_idx.append(selected_indices)
+#                 record_label.append([k for k, val in enumerate(labels_list[i]) if val == 1])
+#                 logits_list.append(sent_scores)
+#                 count += 1
+        
+#     print("Record Index and Score:")
+#     for i in range(count):
+#         print(record_idx[i], record_label[i])
+#     for i in range(count):
+#         print(logits_list[i])
+
+#     return {
+#         "r1_f": float(np.mean(r1_f)) if r1_f else 0.0,
+#         "rl_f": float(np.mean(rl_f)) if rl_f else 0.0
+#     }
+
+
 @torch.no_grad()
-def eval_epoch(model, dataloader, device, strategy="topk"):
+def eval_epoch(model, dataloader, device, strategy="topk", debug=True):
     model.eval()
 
     r1_f, rl_f = [], []
 
+    # 监测数据容器
     record_label = []
     record_idx = []
     logits_list = []
-    count=0
+    count = 0
+    # 设定监测样本数量上限（防止打印太多刷屏）
+    monitor_limit = 10 
 
     for batch in tqdm(dataloader, desc="Val"):
         ids_list = batch["word_ids"]
@@ -92,9 +173,9 @@ def eval_epoch(model, dataloader, device, strategy="topk"):
             # forward
             output = model(word_ids, lengths)
             if len(output) == 3:
-                logits, attn, vectors = output
+                logits, _, vectors = output
             else:
-                logits, attn = output
+                logits, _ = output
                 vectors = None
 
             # sent_scores = torch.sigmoid(logits)
@@ -109,11 +190,6 @@ def eval_epoch(model, dataloader, device, strategy="topk"):
             )
 
             ref_sents = refs_batch[i]
-
-            # r1 = rouge_1(pred_sents, ref_sents)
-            # rl = rouge_l(pred_sents, ref_sents)
-            # r1_f.append(r1["f"])
-            # rl_f.append(rl["f"])
         
             pred_text = "\n".join(pred_sents)
             ref_text = "\n".join(ref_sents)
@@ -124,17 +200,18 @@ def eval_epoch(model, dataloader, device, strategy="topk"):
             r1_f.append(scores['rouge1'].fmeasure)
             rl_f.append(scores['rougeL'].fmeasure)
 
-            if count < 10:
+            # --- 数据收集逻辑 ---
+            # 只有当开启 debug 且收集数量未达上限时，才进行 append 操作，节省内存
+            if debug and count < monitor_limit:
                 record_idx.append(selected_indices)
+                # 筛选出 label 为 1 的索引
                 record_label.append([k for k, val in enumerate(labels_list[i]) if val == 1])
-                logits_list.append(sent_scores)
+                logits_list.append(sent_scores) # 注意：这里存储的是 Tensor，如果显存紧张建议存 .cpu()
                 count += 1
         
-    print("Record Index and Score:")
-    for i in range(count):
-        print(record_idx[i], record_label[i])
-    for i in range(count):
-        print(logits_list[i])
+    # --- 监测打印调用 ---
+    if debug:
+        print_monitor_info(record_idx, record_label, logits_list, count)
 
     return {
         "r1_f": float(np.mean(r1_f)) if r1_f else 0.0,
@@ -211,7 +288,7 @@ def main():
         },
         {
             "params": model.encoder.parameters(),
-            "lr": 1e-3
+            "lr": 1e-4
         },
         {
             "params": model.decoder.parameters(),

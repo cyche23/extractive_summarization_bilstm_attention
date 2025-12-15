@@ -16,6 +16,7 @@ class SequenceLabelingDecoder(nn.Module):
     def __init__(self, input_dim, hidden_dim=128, dropout=0.2):
         super().__init__()
         
+        print("Initializing SequenceLabelingDecoder with Dropout and Weight Initialization")
         # 定义 MLP 网络
         self.classifier = nn.Sequential(
             # Layer 1: 降维与特征整合
