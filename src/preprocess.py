@@ -15,8 +15,8 @@ except LookupError:
     nltk.download('punkt')
 
 # =================配置区域=================
-RAW_PATH = "/root/codes/NLP/extractive_summarization_bilstm_attention/data/test_data"
-OUTPUT_DIR = "/root/codes/NLP/extractive_summarization_bilstm_attention/data/labeled_stories_mini"
+RAW_PATH = "/root/codes/NLP/extractive_summarization_bilstm_attention/data/raw_stories"
+OUTPUT_DIR = "/root/codes/NLP/extractive_summarization_bilstm_attention_origin/data/labeled_stories"
 
 # 全局 ROUGE 打分器 (ROUGE-1, 2, L)
 _ROUGE_SCORER = rouge_scorer.RougeScorer(['rouge1', 'rouge2', 'rougeL'], use_stemmer=True)

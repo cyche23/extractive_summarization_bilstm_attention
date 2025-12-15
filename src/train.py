@@ -72,6 +72,7 @@ def eval_epoch(model, dataloader, device, strategy="topk"):
 
     record_label = []
     record_idx = []
+    logits_list = []
     count=0
 
     for batch in tqdm(dataloader, desc="Val"):
@@ -118,11 +119,6 @@ def eval_epoch(model, dataloader, device, strategy="topk"):
             ref_text = "\n".join(ref_sents)
 
             # 计算 ROUGE
-            # scores = scorer.score(ref_text, pred_text)  # 注意：rouge_score 要求 (target, prediction)
-            # 但注意：有些习惯是 scorer.score(prediction, target)，请核对！
-            # 实际上：rouge_scorer 的 scorer.score(target, prediction) 是错误的！
-            # 正确顺序是：scorer.score(prediction, target)
-            # 参见官方文档：https://github.com/google-research/google-research/blob/master/rouge/rouge_scorer.py#L85
             scores = scorer.score(pred_text, ref_text)
 
             r1_f.append(scores['rouge1'].fmeasure)
@@ -131,11 +127,14 @@ def eval_epoch(model, dataloader, device, strategy="topk"):
             if count < 10:
                 record_idx.append(selected_indices)
                 record_label.append([k for k, val in enumerate(labels_list[i]) if val == 1])
+                logits_list.append(sent_scores)
                 count += 1
         
     print("Record Index and Score:")
     for i in range(count):
         print(record_idx[i], record_label[i])
+    for i in range(count):
+        print(logits_list[i])
 
     return {
         "r1_f": float(np.mean(r1_f)) if r1_f else 0.0,
@@ -215,8 +214,8 @@ def main():
             "lr": 1e-3
         },
         {
-            "params": model.attention.parameters(),
-            "lr": 1e-3
+            "params": model.decoder.parameters(),
+            "lr": 1e-4
         },
     ], weight_decay=1e-4)
 

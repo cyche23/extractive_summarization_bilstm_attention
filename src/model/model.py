@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from .embedding import GloveEmbedding
 from .bilstm_encoder import BiLSTMEncoder
 from .attention import AdditiveAttention
-from .EnhancedSummaryDecoder import EnhancedSummaryDecoder
+from .mlp_decoder import SequenceLabelingDecoder
 
 class ExtractiveSummarizer(nn.Module):
     """
@@ -19,9 +19,8 @@ class ExtractiveSummarizer(nn.Module):
         super().__init__()
         self.embedding = GloveEmbedding(vocab, embedding_dim=embed_dim, glove_path=glove_path, trainable=embed_trainable)
         self.encoder = BiLSTMEncoder(embed_dim, hidden_size)
-        self.attention = AdditiveAttention(hidden_size * 2)
-        # self.classifier = nn.Linear(hidden_size * 2, 1)
-        # self.attention = EnhancedSummaryDecoder(input_dim=hidden_size * 2)
+        self.decoder = AdditiveAttention(hidden_size * 2)
+        # self.decoder = SequenceLabelingDecoder(hidden_size * 2, 1)
 
     def forward(self, word_id_tensor, lengths):
         """
@@ -36,9 +35,9 @@ class ExtractiveSummarizer(nn.Module):
 
         embeds = self.embedding(word_id_tensor)  # [num_sent, max_len, embed_dim]
         sent_vecs = self.encoder(embeds, lengths)  # [num_sent, hidden*2]
-        # attention weights (unused in loss but useful for inference/selection)
-        logits = self.attention(sent_vecs)  # [num_sent]
-        # logits = self.classifier(sent_vecs).squeeze(-1)  # [num_sent]
-        atten_weights = F.softmax(logits, dim=0)        # 注意力权重
-        # Optionally combine attn and logits; here we keep logits as classification scores.
-        return logits, atten_weights
+
+        logits = self.decoder(sent_vecs)  # [num_sent]
+
+        # logits = self.decoder(sent_vecs)
+
+        return logits, []
