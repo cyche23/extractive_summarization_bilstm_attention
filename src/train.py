@@ -408,7 +408,7 @@ def main():
 
     args = parser.parse_args()
 
-    setup_seed(1)
+    setup_seed(2)
     device = args.device or ("cuda" if torch.cuda.is_available() else "cpu")
     print("Device:", device)
 
@@ -466,11 +466,18 @@ def main():
     ).to(device)
 
     # 优化器配置
+    # optimizer = torch.optim.Adam([
+    #     {"params": model.embedding.parameters(), "lr": 1e-5},
+    #     {"params": model.encoder.parameters(), "lr": 5e-4}, # Encoder 学习率
+    #     {"params": model.decoder.parameters(), "lr": 5e-4}, # Decoder 学习率
+    # ], weight_decay=1e-4)
+
     optimizer = torch.optim.Adam([
-        {"params": model.embedding.parameters(), "lr": 1e-5},
-        {"params": model.encoder.parameters(), "lr": 5e-4}, # Encoder 学习率
-        {"params": model.decoder.parameters(), "lr": 5e-4}, # Decoder 学习率
-    ], weight_decay=1e-4)
+        {"params": model.embedding.parameters(), "lr": 1e-4},
+        {"params": model.encoder.parameters(), "lr": 0.00028709720791030176}, # Encoder 学习率
+        {"params": model.decoder.parameters(), "lr": 0.0008698856805684054}, # Decoder 学习率
+    ], weight_decay=0.00001636563786237653)
+
 
     # =========================================================
     # [New Module] Learning Rate Scheduler (学习率调度器)
