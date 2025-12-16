@@ -20,8 +20,8 @@ class ExtractiveSummarizer(nn.Module):
         super().__init__()
         self.embedding = GloveEmbedding(vocab, embedding_dim=embed_dim, glove_path=glove_path, trainable=embed_trainable)
         self.encoder = BiLSTMEncoder(embed_dim, hidden_size)
-        self.decoder = AdditiveAttention(hidden_size * 2)
-        # self.decoder = ContextAwareDecoder(hidden_size * 2)
+        # self.decoder = AdditiveAttention(hidden_size * 2)
+        self.decoder = ContextAwareDecoder(hidden_size * 2)
 
         # self.decoder = SequenceLabelingDecoder(hidden_size * 2)
 
