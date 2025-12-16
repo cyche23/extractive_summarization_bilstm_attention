@@ -151,7 +151,7 @@ if __name__ == "__main__":
     # samples = []
     # with open("/root/codes/NLP/extractive_summarization_bilstm_attention_origin/data/test_data/train.0.json", 'r', encoding='utf8') as f:
     #         samples = json.load(f)
-    path = "/root/codes/NLP/extractive_summarization_bilstm_attention_origin/data/labeled_stories_mini/test"
+    path = "/root/codes/NLP/extractive_summarization_bilstm_attention_origin/data/labeled_stories_mini/val"
 
     target_files = []
 

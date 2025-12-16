@@ -133,7 +133,7 @@ def eval_epoch(model, dataloader, device, strategy="topk", debug=True):
         
     if debug:
         # [新增] 监测模型健康状态 (在验证之前检查)
-        # monitor_model_weights(model)
+        monitor_model_weights(model)
         print_monitor_info(record_idx, record_label, logits_list, count)
 
     return {
@@ -223,7 +223,7 @@ def main():
     # ], weight_decay=1e-4)
 
     optimizer = torch.optim.Adam([
-        {"params": model.embedding.parameters(), "lr": 1e-4},
+        # {"params": model.embedding.parameters(), "lr": 1e-4},
         {"params": model.encoder.parameters(), "lr": 0.00028709720791030176}, # Encoder 学习率
         {"params": model.decoder.parameters(), "lr": 0.0008698856805684054}, # Decoder 学习率
     ], weight_decay=0.00001636563786237653)
