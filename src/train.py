@@ -224,9 +224,9 @@ def main():
 
     optimizer = torch.optim.Adam([
         # {"params": model.embedding.parameters(), "lr": 1e-4},
-        {"params": model.encoder.parameters(), "lr": 0.00028709720791030176}, # Encoder 学习率
-        {"params": model.decoder.parameters(), "lr": 0.0008698856805684054}, # Decoder 学习率
-    ], weight_decay=0.00001636563786237653)
+        {"params": model.encoder.parameters(), "lr": 8e-5}, # Encoder 学习率
+        {"params": model.decoder.parameters(), "lr": 1e-4}, # Decoder 学习率
+    ], weight_decay=1e-5)
 
 
     # =========================================================

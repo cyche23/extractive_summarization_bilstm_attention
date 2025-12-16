@@ -8,6 +8,7 @@ from .bilstm_encoder import BiLSTMEncoder
 from .attention import AdditiveAttention
 from .mlp_decoder import SequenceLabelingDecoder
 from .context_aware_decoder import ContextAwareDecoder
+from .self_attention_decoder import SelfAttentionDecoder
 
 class ExtractiveSummarizer(nn.Module):
     """
@@ -20,8 +21,15 @@ class ExtractiveSummarizer(nn.Module):
         super().__init__()
         self.embedding = GloveEmbedding(vocab, embedding_dim=embed_dim, glove_path=glove_path, trainable=embed_trainable)
         self.encoder = BiLSTMEncoder(embed_dim, hidden_size)
+        self.decoder = SelfAttentionDecoder(
+            input_dim=hidden_size * 2, # Encoder 是双向的，所以输入维度是 512
+            hidden_dim=256,            # Transformer 内部维度
+            num_heads=4,               # 多头注意力的头数
+            num_layers=1,              # 堆叠层数 (建议 1-2 层即可，太深容易过拟合)
+            dropout=0.2
+        )
         # self.decoder = AdditiveAttention(hidden_size * 2)
-        self.decoder = ContextAwareDecoder(hidden_size * 2)
+        # self.decoder = ContextAwareDecoder(hidden_size * 2, hidden_size)
 
         # self.decoder = SequenceLabelingDecoder(hidden_size * 2)
 
