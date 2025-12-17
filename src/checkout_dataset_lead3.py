@@ -104,11 +104,8 @@ def evaluate_lead3(samples):
         reference = " ".join(highlights)
 
         # 3. 初始化 ROUGE 计算器
-        rouge_types=("rouge1", "rougeL")
-        scorer = rouge_scorer.RougeScorer(
-            rouge_types=rouge_types,
-            use_stemmer=True
-        )
+        rouge_types=("rouge1", "rougeLsum")
+        scorer = rouge_scorer.RougeScorer(rouge_types=rouge_types, use_stemmer=True)
 
         scores = scorer.score(candidate, reference)
         # scores = scorer.score(reference, candidate) # 顺序：target, prediction
@@ -151,7 +148,7 @@ if __name__ == "__main__":
     # samples = []
     # with open("/root/codes/NLP/extractive_summarization_bilstm_attention_origin/data/test_data/train.0.json", 'r', encoding='utf8') as f:
     #         samples = json.load(f)
-    path = "/root/codes/NLP/extractive_summarization_bilstm_attention_origin/data/labeled_stories_mini/val"
+    path = "/root/codes/NLP/extractive_summarization_bilstm_attention_origin/data/cnn_dm_extractive/val"
 
     target_files = []
 

@@ -277,7 +277,7 @@ def main():
     parser.add_argument("--val_strategy", default="topk") 
     parser.add_argument("--vocab_path", type=str, default=None)
     # 早停参数
-    parser.add_argument("--patience", type=int, default=20, help="Early stopping patience")
+    parser.add_argument("--patience", type=int, default=5, help="Early stopping patience")
 
     args = parser.parse_args()
 
@@ -320,17 +320,17 @@ def main():
     ).to(device)
 
     # 学习率配置 (保持你最后一次成功的配置)
+    optimizer = torch.optim.Adam([
+        # {"params": model.embedding.parameters(), "lr": 1e-4},
+        {"params": model.encoder.parameters(), "lr": 8e-4},
+        {"params": model.decoder.parameters(), "lr": 5e-5},
+    ], weight_decay=1e-5)
+
     # optimizer = torch.optim.Adam([
     #     # {"params": model.embedding.parameters(), "lr": 1e-4},
-    #     {"params": model.encoder.parameters(), "lr": 8e-4},
+    #     {"params": model.encoder.parameters(), "lr": 5e-4},
     #     {"params": model.decoder.parameters(), "lr": 5e-5},
     # ], weight_decay=1e-5)
-
-    optimizer = torch.optim.Adam([
-        {"params": model.embedding.parameters(), "lr": 1e-4},
-        {"params": model.encoder.parameters(), "lr": 4e-4},
-        {"params": model.decoder.parameters(), "lr": 1e-4},
-    ], weight_decay=1e-5)
 
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode='max', factor=0.5, patience=2, verbose=True, min_lr=1e-7

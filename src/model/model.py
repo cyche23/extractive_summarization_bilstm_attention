@@ -28,8 +28,8 @@ class ExtractiveSummarizer(nn.Module):
         #     num_layers=1,              # 堆叠层数 (建议 1-2 层即可，太深容易过拟合)
         #     dropout=0.3
         # )
-        self.decoder = AdditiveAttention(hidden_size * 2)
-        # self.decoder = ContextAwareDecoder(hidden_size * 2, hidden_size)
+        # self.decoder = AdditiveAttention(hidden_size * 2)
+        self.decoder = ContextAwareDecoder(hidden_size * 2, hidden_size)
 
         # self.decoder = SequenceLabelingDecoder(hidden_size * 2)
 
