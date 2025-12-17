@@ -28,7 +28,7 @@ def predict_summary(article_sents, sent_scores, sent_vectors=None, strategy="top
         # 文档 5.3 建议的动态 K 值策略
         if num_sents <= 10:
             k = 2
-        elif num_sents <= 20:
+        elif num_sents <= 30:
             k = 3
         else:
             k = 4

@@ -17,7 +17,7 @@ class GloveEmbedding(nn.Module):
     Whether to fine-tune GloVe embeddings. 
     Set to False or True to fine-tune GloVe embeddings.
     """
-    def __init__(self, vocab, embedding_dim=300, glove_path=None, trainable=False):
+    def __init__(self, vocab, embedding_dim=300, glove_path=None, trainable=True):
         super().__init__()
         self.vocab = vocab
         self.vocab_size = len(vocab)

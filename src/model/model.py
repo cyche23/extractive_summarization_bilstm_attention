@@ -6,6 +6,9 @@ import torch.nn.functional as F
 from .embedding import GloveEmbedding
 from .bilstm_encoder import BiLSTMEncoder
 from .attention import AdditiveAttention
+from .mlp_decoder import SequenceLabelingDecoder
+from .context_aware_decoder import ContextAwareDecoder
+from .self_attention_decoder import SelfAttentionDecoder
 
 class ExtractiveSummarizer(nn.Module):
     """
@@ -17,9 +20,18 @@ class ExtractiveSummarizer(nn.Module):
     def __init__(self, vocab, embed_dim=300, hidden_size=256, glove_path=None, embed_trainable=True):
         super().__init__()
         self.embedding = GloveEmbedding(vocab, embedding_dim=embed_dim, glove_path=glove_path, trainable=embed_trainable)
-        self.encoder = BiLSTMEncoder(embed_dim, hidden_size)
-        self.attention = AdditiveAttention(hidden_size * 2)
-        # self.classifier = nn.Linear(hidden_size * 2, 1)
+        self.encoder = BiLSTMEncoder(embed_dim, hidden_size, dropout=0.3)
+        # self.decoder = SelfAttentionDecoder(
+        #     input_dim=hidden_size * 2, # Encoder 是双向的，所以输入维度是 512
+        #     hidden_dim=256,            # Transformer 内部维度
+        #     num_heads=4,               # 多头注意力的头数
+        #     num_layers=1,              # 堆叠层数 (建议 1-2 层即可，太深容易过拟合)
+        #     dropout=0.3
+        # )
+        # self.decoder = AdditiveAttention(hidden_size * 2)
+        self.decoder = ContextAwareDecoder(hidden_size * 2, hidden_size)
+
+        # self.decoder = SequenceLabelingDecoder(hidden_size * 2)
 
     def forward(self, word_id_tensor, lengths):
         """
@@ -34,9 +46,7 @@ class ExtractiveSummarizer(nn.Module):
 
         embeds = self.embedding(word_id_tensor)  # [num_sent, max_len, embed_dim]
         sent_vecs = self.encoder(embeds, lengths)  # [num_sent, hidden*2]
-        # attention weights (unused in loss but useful for inference/selection)
-        logits = self.attention(sent_vecs)  # [num_sent]
-        # logits = self.classifier(sent_vecs).squeeze(-1)  # [num_sent]
-        atten_weights = F.softmax(logits, dim=0)        # 注意力权重
-        # Optionally combine attn and logits; here we keep logits as classification scores.
-        return logits, atten_weights
+
+        logits = self.decoder(sent_vecs)  # [num_sent]
+
+        return logits, []

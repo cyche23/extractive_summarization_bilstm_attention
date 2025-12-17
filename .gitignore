@@ -27,4 +27,5 @@ Thumbs.db
 # ---- data ----
 .raw
 checkpoints/
+experiments/
 vocab/
