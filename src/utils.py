@@ -127,9 +127,9 @@ def debug_lead3_data(dataloader):
     print(f"[Ref Length (char)]: {len(ref_text)}")
     
     # 重新计算一次分数 (开启 Stemmer)
-    debug_scorer = rouge_scorer.RougeScorer(['rouge1', 'rougeL'], use_stemmer=True)
+    debug_scorer = rouge_scorer.RougeScorer(['rouge1', 'rougeLsum'], use_stemmer=True)
     scores = debug_scorer.score(pred_text, ref_text)
-    print(f"[Debug Score with Stemmer] R1: {scores['rouge1'].fmeasure:.4f} | RL: {scores['rougeL'].fmeasure:.4f}")
+    print(f"[Debug Score with Stemmer] R1: {scores['rouge1'].fmeasure:.4f} | RLsum: {scores['rougeLsum'].fmeasure:.4f}")
     print("=========================\n")
 
 # 在 main() 中调用:

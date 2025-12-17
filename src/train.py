@@ -30,7 +30,7 @@ def setup_seed(seed):
      random.seed(seed)
      torch.backends.cudnn.deterministic = True
 
-scorer = rouge_scorer.RougeScorer(['rouge1', 'rougeL'], use_stemmer=True)
+scorer = rouge_scorer.RougeScorer(['rouge1','rougeLsum'], use_stemmer=True)
 
 # ========================================================
 # [新增模块] 早停机制 (Early Stopping)
@@ -86,12 +86,12 @@ def plot_training_curves(history, lead3_score, output_dir):
 
     # --- 子图 2: Validation ROUGE ---
     ax2.plot(epochs, history['r1'], 'g-s', label='Val ROUGE-1', linewidth=2)
-    ax2.plot(epochs, history['rl'], 'm-^', label='Val ROUGE-L', linewidth=2)
+    ax2.plot(epochs, history['rlsum'], 'm-^', label='Val ROUGE-Lsum', linewidth=2)
     
     # 绘制 Lead-3 基准线
     if lead3_score:
         ax2.axhline(y=lead3_score['r1'], color='g', linestyle='--', alpha=0.5, label=f"Lead-3 R1 ({lead3_score['r1']:.3f})")
-        ax2.axhline(y=lead3_score['rl'], color='m', linestyle='--', alpha=0.5, label=f"Lead-3 RL ({lead3_score['rl']:.3f})")
+        ax2.axhline(y=lead3_score['rlsum'], color='m', linestyle='--', alpha=0.5, label=f"Lead-3 RLsum ({lead3_score['rlsum']:.3f})")
 
     ax2.set_title('Validation ROUGE Scores', fontsize=14)
     ax2.set_xlabel('Epochs', fontsize=12)
@@ -119,6 +119,7 @@ def calc_lead3_baseline(dataloader, device):
     print("Calculating Lead-3 Baseline on Validation Set...")
     r1_scores = []
     rl_scores = []
+    rlsum_scores = []
     
     for batch in tqdm(dataloader, desc="Lead-3 Baseline"):
         raw_sents_batch = batch["raw_sents"]
@@ -132,12 +133,13 @@ def calc_lead3_baseline(dataloader, device):
             
             scores = scorer.score(pred_text, ref_text)
             r1_scores.append(scores['rouge1'].fmeasure)
-            rl_scores.append(scores['rougeL'].fmeasure)
+            rlsum_scores.append(scores['rougeLsum'].fmeasure)
             
     lead3_r1 = float(np.mean(r1_scores))
     lead3_rl = float(np.mean(rl_scores))
-    print(f"[*] Lead-3 Baseline -> ROUGE-1: {lead3_r1:.4f} | ROUGE-L: {lead3_rl:.4f}")
-    return {'r1': lead3_r1, 'rl': lead3_rl}
+    lead3_rlsum = float(np.mean(rlsum_scores))
+    print(f"[*] Lead-3 Baseline -> ROUGE-1: {lead3_r1:.4f} | ROUGE-L: {lead3_rl:.4f} | ROUGE-Lsum: {lead3_rlsum:.4f}")
+    return {'r1': lead3_r1, 'rlsum': lead3_rlsum}
 
 def label_smoothing_loss(logits, targets, smoothing=0.1):
     """
@@ -206,7 +208,7 @@ def train_epoch(model, dataloader, optimizer, device):
 @torch.no_grad()
 def eval_epoch(model, dataloader, device, strategy="topk", debug=True):
     model.eval()
-    r1_f, rl_f = [], []
+    r1_f, rlsum_f = [], []
     
     count = 0
     monitor_limit = 3
@@ -247,7 +249,7 @@ def eval_epoch(model, dataloader, device, strategy="topk", debug=True):
 
             scores = scorer.score(pred_text, ref_text)
             r1_f.append(scores['rouge1'].fmeasure)
-            rl_f.append(scores['rougeL'].fmeasure)
+            rlsum_f.append(scores['rougeLsum'].fmeasure)
 
             count += 1
         
@@ -257,7 +259,7 @@ def eval_epoch(model, dataloader, device, strategy="topk", debug=True):
 
     return {
         "r1_f": float(np.mean(r1_f)) if r1_f else 0.0,
-        "rl_f": float(np.mean(rl_f)) if rl_f else 0.0
+        "rlsum_f": float(np.mean(rlsum_f)) if rlsum_f else 0.0
     }
 
 def get_cache_path(data_prefix):
@@ -307,7 +309,7 @@ def main():
 
     # ================= [新增] 计算 Lead-3 基准 =================
     lead3_scores = calc_lead3_baseline(val_loader, device)
-    debug_lead3_data(val_loader)
+    # debug_lead3_data(val_loader)
 
     # ================= 4. 模型与优化器 =================
     model = ExtractiveSummarizer(
@@ -340,12 +342,12 @@ def main():
     # ================= 5. 训练循环 =================
     print("\nInitial Evaluation:")
     val_scores = eval_epoch(model, val_loader, device, strategy=args.val_strategy, debug=True)
-    print(f"Init ROUGE-1: {val_scores['r1_f']:.4f} | ROUGE-L: {val_scores['rl_f']:.4f}")
+    print(f"Init ROUGE-1: {val_scores['r1_f']:.4f} | ROUGE-Lsum: {val_scores['rlsum_f']:.4f}")
 
-    best_rl = 0.0
+    best_rlsum = 0.0
     
     # [新增] 用于记录绘图数据
-    history = {'loss': [], 'r1': [], 'rl': []}
+    history = {'loss': [], 'r1': [], 'rlsum': []}
 
     for epoch in range(1, args.epochs + 1):
         print(f"\nEpoch {epoch}/{args.epochs}")
@@ -358,34 +360,35 @@ def main():
 
         # 2. 验证
         val_scores = eval_epoch(model, val_loader, device, strategy=args.val_strategy, debug=True)
-        current_rouge_l = val_scores['rl_f']
         current_rouge_1 = val_scores['r1_f']
-        print(f"ROUGE-1: {current_rouge_1:.4f} | ROUGE-L: {current_rouge_l:.4f}")
+        current_rouge_lsum = val_scores['rlsum_f']
+        print(f"ROUGE-1: {current_rouge_1:.4f} | ROUGE-Lsum: {current_rouge_lsum:.4f}")
 
         # 3. 记录历史
         history['loss'].append(avg_train_loss)
         history['r1'].append(current_rouge_1)
-        history['rl'].append(current_rouge_l)
+        history['rlsum'].append(current_rouge_lsum)
 
         # 4. 调度器更新
-        scheduler.step(current_rouge_l)
+        scheduler.step(current_rouge_lsum)
 
         # 5. 保存最佳模型
-        if current_rouge_l > best_rl:
-            best_rl = current_rouge_l
+        if current_rouge_lsum > best_rlsum:
+            best_rlsum = current_rouge_lsum
             save_model(model, args.save_path)
-            print(f"Model saved (ROUGE-L={best_rl:.4f})")
+            print(f"Model saved (ROUGE-Lsum={best_rlsum:.4f})")
         
         # 6. [新增] 实时绘图 (每个 epoch 都刷新图片，方便实时监控)
         plot_training_curves(history, lead3_scores, os.path.dirname(args.save_path))
 
         # 7. [新增] 早停检查
-        early_stopping(current_rouge_l)
+        # early_stopping(current_rouge_l)
+        early_stopping(current_rouge_lsum)
         if early_stopping.early_stop:
             print(f"\n[EarlyStopping] Triggered at epoch {epoch}! Best ROUGE-L was {early_stopping.best_score:.4f}")
             break
 
-    print(f"\nTraining Finished. Best ROUGE-L: {best_rl:.4f}")
+    print(f"\nTraining Finished. Best ROUGE-L: {best_rlsum:.4f}")
     # 最后再画一次确保完整
     plot_training_curves(history, lead3_scores, os.path.dirname(args.save_path))
 

@@ -49,6 +49,4 @@ class ExtractiveSummarizer(nn.Module):
 
         logits = self.decoder(sent_vecs)  # [num_sent]
 
-        # logits = self.decoder(sent_vecs)
-
         return logits, []
