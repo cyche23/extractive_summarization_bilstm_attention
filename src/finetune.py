@@ -43,10 +43,10 @@ class HyperparameterTuner:
         setup_seed(42)
         
         # A. 定义超参数空间
-        lr_enc = trial.suggest_float("lr_encoder", 1e-4, 1e-3, log=True)
-        lr_dec = trial.suggest_float("lr_decoder", 1e-4, 1e-3, log=True)
-        weight_decay = trial.suggest_float("weight_decay", 1e-4, 1e-3, log=True)
-        dropout_rate = trial.suggest_float("dropout", 0.2, 0.5)
+        lr_enc = trial.suggest_float("lr_encoder", 1e-4, 2e-3, log=True)
+        lr_dec = trial.suggest_float("lr_decoder", 1e-5, 1e-4, log=True)
+        weight_decay = trial.suggest_float("weight_decay", 1e-6, 2e-5, log=True)
+        dropout_rate = trial.suggest_float("dropout", 0.2, 0.4)
         
         batch_size = self.args.batch_size
 
@@ -69,7 +69,7 @@ class HyperparameterTuner:
         
         # D. 优化器
         optimizer = torch.optim.Adam([
-            {"params": model.embedding.parameters(), "lr": 1e-4}, # Embedding 几乎冻结
+            # {"params": model.embedding.parameters(), "lr": 1e-5}, # Embedding 几乎冻结
             {"params": model.encoder.parameters(), "lr": lr_enc},
             {"params": model.decoder.parameters(), "lr": lr_dec},
         ], weight_decay=weight_decay)

@@ -24,7 +24,8 @@ class BiLSTMEncoder(nn.Module):
             hidden_size=hidden_size,
             num_layers=1,
             batch_first=True,
-            bidirectional=True
+            bidirectional=True, 
+            dropout=dropout,
         )
         self.input_dropout = nn.Dropout(dropout)
         
