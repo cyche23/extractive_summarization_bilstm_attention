@@ -85,10 +85,9 @@ def test_epoch(model, dataloader, device, strategy="topk"):
             # Forward
             output = model(word_ids, lengths)
             if len(output) == 3:
-                logits, _, vectors = output
+                logits, vectors, _ = output
             else:
-                logits, _ = output
-                vectors = None
+                logits, vectors = output
 
             sent_scores = logits
 
@@ -137,7 +136,7 @@ def main():
 
     # 配置参数
     parser.add_argument("--batch_size", type=int, default=1, help="Batch size for testing (default 1 is safest for eval)")
-    parser.add_argument("--strategy", default="topk", choices=["topk", "dynamic"], help="Summary selection strategy")
+    parser.add_argument("--strategy", default="topk", choices=["topk", "dynamic", "mmr"], help="Summary selection strategy")
     parser.add_argument("--device", default=None)
 
     args = parser.parse_args()

@@ -50,11 +50,5 @@ class AdditiveAttention(nn.Module):
         # 4. 计算 Scores (Raw Logits)
         # scores: [N_sent]
         scores = self.v(energy).squeeze(-1)
-
-        # ==========================================
-        # [关键修改]
-        # ❌ 已删除: weights = F.softmax(scores, dim=0)
-        # ✅ 现在直接返回 scores (logits)
-        # ==========================================
         
         return scores

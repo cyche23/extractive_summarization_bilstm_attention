@@ -26,7 +26,7 @@ def predict_summary(article_sents, sent_scores, sent_vectors=None, strategy="top
     use_dynamic_k = "dynamic" in strategy
     if use_dynamic_k:
         # 文档 5.3 建议的动态 K 值策略
-        if num_sents <= 10:
+        if num_sents <= 20:
             k = 2
         elif num_sents <= 30:
             k = 3

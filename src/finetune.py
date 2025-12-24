@@ -44,9 +44,9 @@ class HyperparameterTuner:
         
         # A. 定义超参数空间
         lr_enc = trial.suggest_float("lr_encoder", 1e-4, 2e-3, log=True)
-        lr_dec = trial.suggest_float("lr_decoder", 1e-5, 1e-4, log=True)
+        lr_dec = trial.suggest_float("lr_decoder", 5e-6, 1e-4, log=True)
         weight_decay = trial.suggest_float("weight_decay", 1e-6, 2e-5, log=True)
-        dropout_rate = trial.suggest_float("dropout", 0.2, 0.4)
+        dropout_rate = trial.suggest_float("dropout", 0.1, 0.4)
         
         batch_size = self.args.batch_size
 
@@ -83,11 +83,11 @@ class HyperparameterTuner:
             
             # 验证
             val_scores = eval_epoch(model, val_loader, self.device, strategy="topk", debug=True)
-            current_rl = val_scores['rl_f']
+            current_rl = val_scores['rlsum_f']
             # current_rl = val_scores['r1_f']
             
             # [关键修改] 打印 Loss，证明模型真的在发生不同的变化
-            print(f"[Trial {trial.number} | Ep {epoch}] Loss: {train_loss:.4f} | ROUGE-L: {current_rl:.4f}")
+            print(f"[Trial {trial.number} | Ep {epoch}] Loss: {train_loss:.4f} | ROUGE-Lsum: {current_rl:.4f}")
             
             # 向 Optuna 报告
             trial.report(current_rl, epoch)
