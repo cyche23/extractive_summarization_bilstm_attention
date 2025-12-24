@@ -180,7 +180,7 @@ def train_epoch(model, dataloader, optimizer, device):
                 continue
 
             # Forward
-            logits, attn = model(word_ids, lengths)
+            logits, _ = model(word_ids, lengths)
             
             # Loss Calculation
             # loss = criterion(logits, labels)
@@ -325,12 +325,6 @@ def main():
         {"params": model.encoder.parameters(), "lr": 8e-4},
         {"params": model.decoder.parameters(), "lr": 5e-5},
     ], weight_decay=1e-5)
-
-    # optimizer = torch.optim.Adam([
-    #     # {"params": model.embedding.parameters(), "lr": 1e-4},
-    #     {"params": model.encoder.parameters(), "lr": 5e-4},
-    #     {"params": model.decoder.parameters(), "lr": 5e-5},
-    # ], weight_decay=1e-5)
 
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode='max', factor=0.5, patience=2, verbose=True, min_lr=1e-7
